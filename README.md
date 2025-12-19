@@ -1,15 +1,15 @@
-## API Gateway
+# API Gateway
 
-### Repository Overview
+## Repository Overview
 This repository contains the API Gateway for routing and security in a microservices-based application. It handles:
 
-- Routing requests from the frontend to downstream services.
+- **Routing** requests from the frontend to downstream services.
+- **JWT-based authentication** for protected services.
+- **CORS and cookie management** for local development.
 
-- JWT-based authentication for protected services.
+---
 
-- CORS and cookie management for local development.
-
-Microservices Interaction
+### Microservices Interaction
 
 | Service        | Domain            | Port | Notes                                                |
 | -------------- | ----------------- | ---- | ---------------------------------------------------- |
@@ -18,30 +18,35 @@ Microservices Interaction
 | Auth Service   | auth.localhost    | 8081 | Handles login/signup, issues JWT cookie              |
 | User Service   | users.localhost   | 8082 | Protected service, requires valid JWT                |
 
-### Flow
-1. Login Request:
+---
+
+## Flow
+
+1. **Login Request:**
    - React frontend sends credentials to API Gateway → Auth Service.
    - Auth Service validates credentials and issues JWT in HttpOnly cookie.
 
-2. Authenticated Requests:
+2. **Authenticated Requests:**
    - Subsequent requests from React include JWT cookie.
    - API Gateway reads and validates the JWT before forwarding to protected services (e.g., User Service).
 
-3. Response Handling:
+3. **Response Handling:**
    - Protected services respond to API Gateway → Gateway forwards response to frontend.
 
-### How It Works
-- Routing: Spring Cloud Gateway routes requests based on URL patterns (/auth/**, /users/**).
-- JWT Handling: API Gateway reads JWT from cookies, validates it, and applies authorization filters.
-- CORS & Cookies: Configured to allow cross-origin requests from app.localhost:3000 with credentials.
-- HTTPS: Gateway communicates securely with all microservices using local certificates.
+---
 
------------------------------
+## How It Works
 
-### Setting Up Local Development Environment
+- **Routing:** Spring Cloud Gateway routes requests based on URL patterns (`/auth/**`, `/users/**`).
+- **JWT Handling:** API Gateway reads JWT from cookies, validates it, and applies authorization filters.
+- **CORS & Cookies:** Configured to allow cross-origin requests from `app.localhost:3000` with credentials.
+- **HTTPS:** Gateway communicates securely with all microservices using local certificates.
 
+---
 
-#### Step 0: Challenges Faced
+## Setting Up Local Development Environment
+
+### Step 0: Challenges Faced
 
 - Cookies not sent due to `HTTP` vs `HTTPS` mismatch.
 - CORS issues between frontend and gateway.
@@ -51,88 +56,103 @@ Microservices Interaction
 
 ---
 
-#### Step 1: Generate Local Certificates with mkcert
+### Step 1: Generate Local Certificates with mkcert
 
 Install mkcert:
 
-```bash```
+```bash
 brew install mkcert
 mkcert -install
-
+```
 
 Create wildcard certificate:
 
-```mkcert "*.localhost" "localhost" "app.localhost" "gateway.localhost" "auth.localhost" "users.localhost"```
+```bash
+mkcert "*.localhost" "localhost" "app.localhost" "gateway.localhost" "auth.localhost" "users.localhost"
+```
 
-```mkdir -p ~/certs
+```bash
+mkdir -p ~/certs
 mv _wildcard.localhost.pem ~/certs/localhost.pem
 mv _wildcard.localhost-key.pem ~/certs/localhost-key.pem
 ```
 
 Creates:
+- `_wildcard.localhost.pem` → certificate
+- `_wildcard.localhost-key.pem` → key
 
-_wildcard.localhost.pem → certificate
-
-_wildcard.localhost-key.pem → key
-
-Valid for one level deep only (*.localhost).
-
+Valid for one level deep only (`*.localhost`).
 Expires in ~3 years.
 
-#### Step 2: Convert Certificate to PKCS12 (for Spring Boot)
-```
+---
+
+### Step 2: Convert Certificate to PKCS12 (for Spring Boot)
+
+```bash
 openssl pkcs12 -export \
--in /path/to/_wildcard.localhost+5.pem \
--inkey /path/to/_wildcard.localhost+5-key.pem \
--out ~/certs/localhost.p12 \
--name localhost \
--password pass:changeit
+  -in /path/to/_wildcard.localhost+5.pem \
+  -inkey /path/to/_wildcard.localhost+5-key.pem \
+  -out ~/certs/localhost.p12 \
+  -name localhost \
+  -password pass:changeit
 ```
 
-Use this .p12 in all Spring Boot services.
+Use this `.p12` in all Spring Boot services.
 
-#### Step 3: Edit Hosts File
+---
+
+### Step 3: Edit Hosts File
 
 Edit `/etc/hosts`:
 
+```
 127.0.0.1 app.localhost
 127.0.0.1 gateway.localhost
 127.0.0.1 auth.localhost
 127.0.0.1 users.localhost
+```
 
 Ensures local domains resolve correctly.
 
-#### Step 4: Import mkcert Root into Java Trust Store
-```
-sudo keytool -import -trustcacerts \
--alias mkcert-root \
--file "/Users/<username>/Library/Application Support/mkcert/rootCA.pem" \
--keystore "$JAVA_HOME/lib/security/cacerts" \
--storepass changeit -noprompt
-```
+---
 
+### Step 4: Import mkcert Root into Java Trust Store
+
+```bash
+sudo keytool -import -trustcacerts \
+  -alias mkcert-root \
+  -file "/Users/<username>/Library/Application Support/mkcert/rootCA.pem" \
+  -keystore "$JAVA_HOME/lib/security/cacerts" \
+  -storepass changeit -noprompt
+```
 
 `$JAVA_HOME` = JDK path used by your services.
 
 Avoids PKIX path building failed SSL errors when Spring Boot calls downstream services.
 
-#### Step 5: Configure Spring Boot Microservices
-Common SSL Properties
-```
+---
+
+### Step 5: Configure Spring Boot Microservices
+
+**Common SSL Properties**
+
+```properties
 server.ssl.enabled=true
 server.ssl.key-store=/Users/<username>/certs/localhost.p12
 server.ssl.key-store-password=changeit
 server.ssl.key-store-type=PKCS12
 ```
 
-API Gateway (`gateway.localhost:8080`)
-```
+**API Gateway (`gateway.localhost:8080`)**
+
+```properties
 spring.application.name=api-gateway
 server.port=8080
 ```
 
-### Routes
-```
+**Routes**
+
+```properties
 spring.cloud.gateway.routes[0].id=auth-service
 spring.cloud.gateway.routes[0].uri=https://auth.localhost:8081
 spring.cloud.gateway.routes[0].predicates[0]=Path=/auth/**
@@ -143,22 +163,25 @@ spring.cloud.gateway.routes[1].predicates[0]=Path=/users/**
 spring.cloud.gateway.routes[1].filters[0]=JwtAuthFilter
 ```
 
-### Global CORS
-```
+**Global CORS**
+
+```properties
 spring.cloud.gateway.globalcors.corsConfigurations.[/**].allowedOrigins=https://app.localhost:3000
 spring.cloud.gateway.globalcors.corsConfigurations.[/**].allowedMethods=GET,POST,PUT,DELETE,OPTIONS
 spring.cloud.gateway.globalcors.corsConfigurations.[/**].allowedHeaders=Authorization,Content-Type,Cookie
 spring.cloud.gateway.globalcors.corsConfigurations.[/**].allowCredentials=true
 ```
 
-### Logging
-```
+**Logging**
+
+```properties
 logging.level.org.springframework.cloud.gateway=DEBUG
 logging.level.reactor.netty.http.client=DEBUG
 ```
 
-Auth Service (`auth.localhost:8081`)
-```
+**Auth Service (`auth.localhost:8081`)**
+
+```properties
 spring.application.name=auth-service
 server.port=8081
 
@@ -171,8 +194,9 @@ jwt.secret=my-super-secret-key-which-is-long-enough-256bits
 jwt.expiration=3600000
 ```
 
-User Service (`users.localhost:8082`)
-```
+**User Service (`users.localhost:8082`)**
+
+```properties
 spring.application.name=user-service
 server.port=8082
 
@@ -182,13 +206,15 @@ server.ssl.key-store-password=changeit
 server.ssl.key-store-type=PKCS12
 ```
 
+---
+
 ## Step 6: Configure React Frontend for HTTPS
 
+**Install react-scripts HTTPS support:**
 
-### Install react-scripts HTTPS support:
+In project root:
 
-### in project root
-```
+```env
 HTTPS=true
 SSL_CRT_FILE=/Users/<username>/certs/localhost.pem
 SSL_KEY_FILE=/Users/<username>/certs/localhost-key.pem
@@ -196,46 +222,46 @@ HOST=app.localhost
 PORT=3000
 ```
 
-
 Run at https://app.localhost:3000.
 
-Fetch Example (with cookies)
-```
+**Fetch Example (with cookies):**
+
+```js
 const response = await fetch('https://gateway.localhost:8080/auth/login', {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ email, password }),
-credentials: 'include', // important to send cookies
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email, password }),
+  credentials: 'include', // important to send cookies
 });
 ```
 
-#### Step 7: JWT Cookie Flow
+---
 
-Auth service returns JWT in an HttpOnly cookie.
+### Step 7: JWT Cookie Flow
 
-API Gateway reads the cookie, validates JWT, and forwards requests to user service.
+- Auth service returns JWT in an HttpOnly cookie.
+- API Gateway reads the cookie, validates JWT, and forwards requests to user service.
+- React app sends requests with `credentials: 'include'`.
 
-React app sends requests with credentials: 'include'.
+---
 
-####Step 8: Adding New Microservices
+### Step 8: Adding New Microservices
 
-Add new hostname to hosts file, e.g., new-service.localhost.
+- Add new hostname to hosts file, e.g., `new-service.localhost`.
+- Include it in mkcert command:
 
-Include it in mkcert command:
+```bash
+mkcert "*.localhost" "localhost" "app.localhost" "gateway.localhost" "auth.localhost" "users.localhost" "new-service.localhost"
+```
 
-```mkcert "*.localhost" "localhost" "app.localhost" "gateway.localhost" "auth.localhost" "users.localhost" "new-service.localhost"```
+- Convert to `.p12` if it’s a Spring Boot service.
+- Update API Gateway routes and CORS as needed.
 
-
-Convert to .p12 if it’s a Spring Boot service.
-
-Update API Gateway routes and CORS as needed.
+---
 
 # Notes
 
-Make sure all services are using the same mkcert .p12 for local HTTPS.
-
-Use credentials: 'include' in frontend fetch calls to handle cookies.
-
-Use https:// consistently to avoid cookie and CORS issues.
-
-Java must trust mkcert root to communicate over HTTPS internally.
+- Make sure all services are using the same mkcert `.p12` for local HTTPS.
+- Use `credentials: 'include'` in frontend fetch calls to handle cookies.
+- Use `https://` consistently to avoid cookie and CORS issues.
+- Java must trust mkcert root to communicate over HTTPS internally.
