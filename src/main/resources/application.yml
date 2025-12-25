@@ -1,0 +1,95 @@
+# ===============================
+# Server
+# ===============================
+server:
+  port: 8080
+  ssl:
+    enabled: true
+    key-store: /Users/venkatesh.v/certs/localhost.p12
+    key-store-password: changeit
+    key-store-type: PKCS12
+    trust-store: /Library/Java/JavaVirtualMachines/amazon-corretto-21.jdk/Contents/Home/lib/security/cacerts
+
+spring:
+  application:
+    name: api-gateway
+
+  # ===============================
+  # Redis Configuration
+  # ===============================
+  data:
+    redis:
+      host: localhost
+      port: 6380
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 4
+        shutdown-timeout: 200ms
+
+  # ===============================
+  # Spring Cloud Gateway
+  # ===============================
+  cloud:
+    gateway:
+      routes:
+        # -------- AUTH SERVICE (NO JWT) --------
+        - id: auth-service
+          uri: https://auth.localhost:8081
+          predicates:
+            - Path=/auth/**
+
+        # -------- USER SERVICE (JWT REQUIRED) --------
+        - id: user-service
+          uri: https://users.localhost:8082
+          predicates:
+            - Path=/users/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter:
+                  replenishRate: 10
+                  burstCapacity: 20
+                  requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+
+            - JwtAuthFilter
+
+      # ===============================
+      # Global CORS Configuration
+      # ===============================
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - https://app.localhost:3000
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - Authorization
+              - Content-Type
+              - Cookie
+            allowCredentials: true
+
+# ===============================
+# JWT
+# ===============================
+jwt:
+  secret: my-super-secret-key-which-is-long-enough-256bits
+
+# ===============================
+# Logging
+# ===============================
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.gateway.filter.ratelimit: TRACE
+    reactor.netty.http.client: DEBUG
+    org.springframework.data.redis: DEBUG
+    io.lettuce.core: DEBUG

@@ -259,6 +259,17 @@ mkcert "*.localhost" "localhost" "app.localhost" "gateway.localhost" "auth.local
 
 ---
 
+### Step 9: Redis 
+- For session management or caching, you can run Redis locally using Docker:
+
+```bash
+docker run -d \
+  --name redis-gateway \
+  -p 6380:6379 \
+  redis:7
+```
+- Connect your API Gateway to Redis at `localhost:6380`, check application.yam file for config.
+
 # Notes
 
 - Make sure all services are using the same mkcert `.p12` for local HTTPS.
