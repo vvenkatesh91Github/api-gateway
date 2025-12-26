@@ -1,4 +1,4 @@
-package org.project.apigateway.ratelimiters.fixedwindow;
+package org.project.apigateway.ratelimiters;
 
 import java.util.Deque;
 import java.util.LinkedList;

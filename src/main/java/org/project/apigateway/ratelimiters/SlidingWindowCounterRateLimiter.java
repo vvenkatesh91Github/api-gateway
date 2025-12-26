@@ -1,4 +1,4 @@
-package org.project.apigateway.ratelimiters.fixedwindow;
+package org.project.apigateway.ratelimiters;
 
 public class SlidingWindowCounterRateLimiter implements RateLimiter {
     private final int limit;

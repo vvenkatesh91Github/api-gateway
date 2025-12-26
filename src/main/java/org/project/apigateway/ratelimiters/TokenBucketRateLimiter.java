@@ -1,4 +1,4 @@
-package org.project.apigateway.ratelimiters.fixedwindow;
+package org.project.apigateway.ratelimiters;
 
 public class TokenBucketRateLimiter implements RateLimiter {
     private final int capacity;
