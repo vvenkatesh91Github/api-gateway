@@ -10,12 +10,19 @@ server:
     key-store-type: PKCS12
     trust-store: /Library/Java/JavaVirtualMachines/amazon-corretto-21.jdk/Contents/Home/lib/security/cacerts
 
+internal:
+  token:
+    secret: my-super-secret-token-for-internal-communication
+
+# ===============================
+# Spring Application
+# ===============================
 spring:
   application:
     name: api-gateway
 
   # ===============================
-  # Redis Configuration
+  # Redis Configuration (Rate Limiting)
   # ===============================
   data:
     redis:
@@ -34,12 +41,39 @@ spring:
   # ===============================
   cloud:
     gateway:
+
+      # -------------------------------
+      # Global HTTP Client Timeout
+      # -------------------------------
+      httpclient:
+        connect-timeout: 15000
+        response-timeout: 30s
+
+      # -------------------------------
+      # Routes
+      # -------------------------------
       routes:
+        - id: actuator
+          uri: https://gateway.localhost:8080
+          predicates:
+            - Path=/actuator/**
+          filters:
+            - StripPrefix=0
+
         # -------- AUTH SERVICE (NO JWT) --------
         - id: auth-service
           uri: https://auth.localhost:8081
           predicates:
             - Path=/auth/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: authServiceCB
+                fallbackUri: forward:/fallback/auth
+            - name: Retry
+              args:
+                retries: 2
+                statuses: BAD_GATEWAY, GATEWAY_TIMEOUT, INTERNAL_SERVER_ERROR
 
         # -------- USER SERVICE (JWT REQUIRED) --------
         - id: user-service
@@ -47,6 +81,8 @@ spring:
           predicates:
             - Path=/users/**
           filters:
+
+            # Rate Limiting
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter:
@@ -55,11 +91,18 @@ spring:
                   requestedTokens: 1
                 key-resolver: "#{@userKeyResolver}"
 
-            - JwtAuthFilter
+            # JWT Validation (Custom Filter)
+            - name: JwtAuthFilter
 
-      # ===============================
+            # Circuit Breaker
+            - name: CircuitBreaker
+              args:
+                name: userServiceCB
+                fallbackUri: forward:/fallback/user
+
+      # -------------------------------
       # Global CORS Configuration
-      # ===============================
+      # -------------------------------
       globalcors:
         corsConfigurations:
           '[/**]':
@@ -75,13 +118,60 @@ spring:
               - Authorization
               - Content-Type
               - Cookie
+              - X-USERID
             allowCredentials: true
 
 # ===============================
-# JWT
+# JWT Configuration
 # ===============================
 jwt:
   secret: my-super-secret-key-which-is-long-enough-256bits
+
+# ===============================
+# Resilience4j Circuit Breaker
+# ===============================
+resilience4j:
+  circuitbreaker:
+    metrics:
+      enabled: true
+    configs:
+      default:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 3
+    instances:
+      authServiceCB:
+        baseConfig: default
+      userServiceCB:
+        baseConfig: default
+  timelimiter:
+    metrics:
+      enabled: true
+    instances:
+        authServiceCB:
+            timeoutDuration: 10s
+        userServiceCB:
+            timeoutDuration: 10s
+
+# ===============================
+# Actuator Metrics
+# ===============================
+management:
+  server:
+    port: 9090   # 👈 strongly recommended (separate from gateway port)
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: api-gateway
 
 # ===============================
 # Logging
@@ -91,5 +181,6 @@ logging:
     org.springframework.cloud.gateway: DEBUG
     org.springframework.cloud.gateway.filter.ratelimit: TRACE
     reactor.netty.http.client: DEBUG
+    io.github.resilience4j.circuitbreaker: DEBUG
     org.springframework.data.redis: DEBUG
     io.lettuce.core: DEBUG

@@ -259,7 +259,7 @@ mkcert "*.localhost" "localhost" "app.localhost" "gateway.localhost" "auth.local
 
 ---
 
-### Step 9: Redis 
+### Step 9: Redis
 - For session management or caching, you can run Redis locally using Docker:
 
 ```bash
@@ -269,6 +269,87 @@ docker run -d \
   redis:7
 ```
 - Connect your API Gateway to Redis at `localhost:6380`, check application.yam file for config.
+
+
+### Step 10: Circuit Breaker Configuration
+
+The API Gateway uses a circuit breaker pattern to improve resilience when calling downstream services (such as the Auth Service). This prevents cascading failures and provides fallback responses if a service is unavailable or slow.
+
+#### How Circuit Breaker Works
+- Monitors requests to downstream services.
+- If failures or timeouts exceed a threshold, the circuit opens and requests are routed to a fallback controller.
+- After a wait period, the circuit allows some requests to test if the service has recovered.
+
+#### Example Configuration (Resilience4j)
+Add the following to your `application.yml` to configure the circuit breaker and its timeout:
+
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      authServiceCircuitBreaker:  # Use the name from your code/config
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+  timelimiter:
+    instances:
+      authServiceCircuitBreaker:
+        timeoutDuration: 5s  # Increase if your auth service is slow
+```
+
+- `timeoutDuration`: How long to wait for a response before considering it a failure (default is 1s).
+- `waitDurationInOpenState`: How long the circuit stays open before trying again.
+- `failureRateThreshold`: Percentage of failures to open the circuit.
+
+**Note:** Adjust `timeoutDuration` to be longer than your typical downstream service response time to avoid premature fallback.
+
+#### Fallback Controller
+When the circuit is open, requests are routed to a fallback controller that returns a default response or error message.
+
+---
+
+### Step 11: Prometheus and Grafana Monitoring Setup
+
+To monitor your microservices, you can use Prometheus and Grafana running in Docker containers.
+
+#### Prometheus Setup
+- Prometheus scrapes metrics from your services and stores them for analysis.
+- The configuration file is located at `src/main/resources/prometheus.yml`.
+- Prometheus runs in Docker and is accessible at [http://localhost:9091](http://localhost:9091).
+
+**Run Prometheus in Docker:**
+```bash
+docker run -d \
+  --name prometheus \
+  -p 9091:9090 \
+  -v $(pwd)/src/main/resources/prometheus.yml:/etc/prometheus/prometheus.yml \
+  prom/prometheus
+```
+- This maps Prometheus' default port 9090 in the container to 9091 on your host.
+- Make sure your services expose `/actuator/prometheus` endpoints for metrics.
+
+#### Grafana Setup
+- Grafana is used to visualize metrics collected by Prometheus.
+- Grafana runs in Docker and is accessible at [http://localhost:4000](http://localhost:4000).
+
+**Run Grafana in Docker:**
+```bash
+docker run -d \
+  --name grafana \
+  -p 4000:3000 \
+  grafana/grafana
+```
+- This maps Grafana's default port 3000 in the container to 4000 on your host.
+
+#### Connecting Grafana to Prometheus
+1. Open Grafana at [http://localhost:4000](http://localhost:4000).
+2. Login (default: admin/admin).
+3. Add Prometheus as a data source:
+   - URL: `http://host.docker.internal:9091` (or `http://localhost:9091` if running outside Docker)
+4. Import dashboards or create your own to visualize metrics.
+
+---
 
 # Notes
 
