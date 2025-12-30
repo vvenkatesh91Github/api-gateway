@@ -79,7 +79,7 @@ spring:
         - id: user-service
           uri: https://users.localhost:8082
           predicates:
-            - Path=/users/**
+            - Path=/v*/users/**
           filters:
 
             # Rate Limiting
