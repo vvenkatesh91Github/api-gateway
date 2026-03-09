@@ -20,6 +20,14 @@ This repository contains the API Gateway for routing and security in a microserv
 
 ---
 
+React Frontend
+      ↓
+API Gateway (JWT Validation, Routing, Circuit Breaker)
+      ↓
+Auth Service ─── User Service
+      ↓
+Kafka → Notification Service
+
 ## Flow
 
 1. **Login Request:**
